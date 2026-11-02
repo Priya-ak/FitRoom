@@ -315,7 +315,7 @@ function Home() {
               The dress goes on <em className="text-[#c9a96a] not-italic">your photo</em>, not a model's.
             </h1>
             <p className="mt-4 max-w-xl text-base leading-relaxed text-neutral-600 sm:text-lg">
-            Choose a garment photo from the catalogue or upload your own. When FASHN is configured,
+            Choose a garment photo from the catalogue or upload your own. When AI try-on is configured,
             FitRoom uses your selfie and that garment image for a real AI try-on — never a random model result.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
@@ -330,7 +330,7 @@ function Home() {
               {[
                 ['Your photo', 'stays yours'],
                   ['Women · Men · Kids · Unisex', 'racks included'],
-                  ['FASHN AI', 'when configured'],
+                  ['PixelAPI AI', 'when configured'],
               ].map(([v, l]) => (
                 <div key={l}>
                   <dt className="font-display text-xl font-semibold">{v}</dt>
@@ -362,7 +362,7 @@ function Home() {
           {[
             { icon: Camera, t: '1 · Add your photo', d: 'Front-facing, daylight, fitted top. Shoulders and waist visible works best — this photo is the final result.' },
             { icon: Shirt, t: '2 · Pick a garment', d: 'Browse Women, Men, Kids and Unisex; upload a real garment photo when a catalogue illustration is shown.' },
-            { icon: Sparkles, t: '3 · Generate your try-on', d: 'FASHN uses your uploaded selfie and the selected garment photo. Manual overlays are clearly marked as previews.' },
+            { icon: Sparkles, t: '3 · Generate your try-on', d: 'The AI try-on uses your uploaded selfie and the selected garment photo. Manual overlays are clearly marked as previews.' },
           ].map((s) => (
             <div key={s.t} className="rounded-3xl border border-neutral-200 bg-[#f8f7f4] p-6">
               <span className="flex size-11 items-center justify-center rounded-2xl bg-[#111111] text-white"><s.icon className="size-5" /></span>
@@ -459,7 +459,7 @@ function Home() {
       <section id="studio" className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-12 sm:px-6">
         <p className="text-xs font-semibold tracking-[0.2em] text-[#8a6d2b] uppercase">The studio</p>
         <h2 className="mt-1 font-display text-2xl font-semibold tracking-tight sm:text-3xl">Create your look — on your photo</h2>
-        <p className="mt-1 max-w-2xl text-sm text-neutral-600 sm:text-base">Generate a FASHN AI try-on with your uploaded selfie and the selected garment. A separate manual overlay preview is available below.</p>
+        <p className="mt-1 max-w-2xl text-sm text-neutral-600 sm:text-base">Generate an AI try-on with your uploaded selfie and the selected garment. A separate manual overlay preview is available below.</p>
         {storageNote && <p role="status" className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{storageNote}</p>}
 
         <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_1.1fr]">
@@ -513,7 +513,7 @@ function Home() {
             >
               {genPending ? (<><Loader2 className="size-4 animate-spin" /> Generating AI try-on…</>) : (<><Wand2 className="size-4" /> Generate AI try-on</>)}
             </button>
-            {!aiReady && <p role="status" className="text-center text-xs text-amber-800">AI try-on is not configured. Set FASHN_API_KEY on the server to generate a result.</p>}
+            {!aiReady && <p role="status" className="text-center text-xs text-amber-800">AI try-on is not configured. Set PIXELAPI_API_KEY on the server to generate a result.</p>}
             {!canGenerate && (
               <p className="text-center text-xs text-neutral-500">
                 {selfie.remoteUrl
@@ -554,7 +554,7 @@ function Home() {
                 <div className="flex min-h-[280px] flex-col items-center justify-center rounded-3xl bg-white p-8 text-center">
                   <Loader2 className="size-10 animate-spin text-[#c9a96a]" />
                   <h3 className="mt-4 font-display text-xl font-semibold">Generating your AI try-on…</h3>
-                  <p className="mt-1 max-w-xs text-sm text-neutral-500">FASHN is applying your selected garment to your uploaded photo.</p>
+                  <p className="mt-1 max-w-xs text-sm text-neutral-500">The AI is applying your selected garment to your uploaded photo.</p>
                 </div>
               ) : latestResultUrl ? (
                 <div className="relative">
@@ -570,7 +570,7 @@ function Home() {
                   <div className="mt-3">
                     {activeFit && <img src={activeFit.resultUrl} alt={`${activeFit.garmentName} on your photo`} className="aspect-[3/4] w-full rounded-2xl border border-neutral-200 bg-white object-cover" />}
                   </div>
-                  {!exactMode && <p className="mt-3 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-[13px] leading-relaxed text-neutral-600">This is a manually positioned photo preview, not an AI fitting or a prediction of garment fit. Use “Generate AI try-on” for the FASHN result.</p>}
+                  {!exactMode && <p className="mt-3 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-[13px] leading-relaxed text-neutral-600">This is a manually positioned photo preview, not an AI fitting or a prediction of garment fit. Use “Generate AI try-on” for the AI result.</p>}
                   {latestNote && <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-[13px] leading-relaxed text-neutral-600 ring-1 ring-neutral-200">{latestNote}</p>}
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button onClick={() => latestResultUrl && activeFit && downloadUrl(latestResultUrl, `fitroom-${activeFit.garmentName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`)} className="flex items-center gap-1.5 rounded-full bg-[#111111] px-5 py-2.5 text-sm font-semibold text-white hover:bg-black">

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A virtual try-on studio where you upload a selfie and pick a catalog garment or your own clothing photo to generate a try-on. Includes a before/after slider,…",
+  "description": "A virtual try-on studio where you upload a selfie and pick a catalog garment or your own clothing photo to generate a try-on. Includes a before/after slider,\u2026",
   "scripts": {
     "dev": "vite dev --config vite.config.cloudflare.ts --port 3000",
     "build": "vite build --config vite.config.cloudflare.ts",
@@ -28,7 +28,8 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tailwind-merge": "^3.0.0",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.54.9",

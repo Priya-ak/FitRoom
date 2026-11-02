@@ -39,9 +39,10 @@ and environment-variable checklist.
 npm run build:netlify
 ```
 
-Set `FASHN_API_KEY` on the server to enable real AI try-ons. Configure persistent
-MonstarX storage or the `R2_*` credentials before deploying; production uploads
-fail clearly instead of falling back to instance-local files. Cloudflare D1
+Set `PIXELAPI_API_KEY` on the server to enable real AI try-ons (FASHN is an optional
+fallback). Images are stored privately in Cloudinary via `CLOUDINARY_CLOUD_NAME`,
+`CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET`; production uploads fail clearly
+instead of falling back to instance-local files. Cloudflare D1
 bindings in `wrangler.jsonc` do not automatically exist in Netlify functions.
 
 ## Project layout

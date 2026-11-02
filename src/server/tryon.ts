@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { currentUser } from '@/lib/session.server'
 import { keyFromFileUrl, storage, storageStatus } from '@/lib/storage'
+import { pixelApiReady, pollPixelTryOn, startPixelTryOn, type PixelCategory } from '@/lib/pixelapi'
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
 const MAX_BYTES = 10 * 1024 * 1024
@@ -20,10 +21,30 @@ function ownerPrefix(userId: string | null): string {
   return userId ? `users/${userId}/tryon` : 'public/tryon'
 }
 
+type TryOnProvider = 'pixelapi' | 'fashn'
+
+// PixelAPI job ids are prefixed so polling routes to the right provider even if the env changes mid-job.
+const PIXEL_JOB_PREFIX = 'px_'
+const RESULT_NOTE = 'AI try-on of your uploaded photo wearing the selected garment.'
+
+/** TRYON_PROVIDER picks explicitly; otherwise PixelAPI when its key is set, then FASHN. */
+function tryOnProvider(): TryOnProvider {
+  const explicit = (process.env.TRYON_PROVIDER ?? '').trim().toLowerCase()
+  if (explicit === 'pixelapi' || explicit === 'fashn') return explicit
+  if (pixelApiReady()) return 'pixelapi'
+  if (fashnKey().length > 8) return 'fashn'
+  return 'pixelapi'
+}
+
+function providerReady(provider: TryOnProvider): boolean {
+  return provider === 'pixelapi' ? pixelApiReady() : fashnKey().length > 8
+}
+
 export const getRuntimeStatus = createServerFn({ method: 'GET' }).handler(async () => {
-  const key = (process.env.FASHN_API_KEY ?? process.env.TRYON_API_KEY ?? '').trim()
+  const provider = tryOnProvider()
   return {
-    exact: key.length > 8,
+    exact: providerReady(provider),
+    provider,
     storage: storageStatus(),
   } as const
 })
@@ -137,6 +158,13 @@ function mapCategory(category: string): 'auto' | 'tops' | 'bottoms' | 'one-piece
   return 'auto'
 }
 
+function pixelCategory(category: string): PixelCategory {
+  const mapped = mapCategory(category)
+  if (mapped === 'one-pieces') return 'dress'
+  if (mapped === 'bottoms') return 'lowerbody'
+  return 'upperbody'
+}
+
 function bytesToDataUri(bytes: Uint8Array, contentType: string): string {
   let binary = ''
   const chunk = 0x8000
@@ -202,6 +230,24 @@ function fashnBase(): string {
   return (process.env.TRYON_API_URL ?? 'https://api.fashn.ai/v1').trim().replace(/\/+$/, '')
 }
 
+/** Saves a generated image under the signed-in user's prefix (or public/ for guests). */
+async function storeResult(bytes: ArrayBuffer | Uint8Array, contentType: string) {
+  let userId: string | null = null
+  try {
+    userId = (await currentUser())?.id ?? null
+  } catch {
+    userId = null
+  }
+  const extension = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg'
+  const key = `${ownerPrefix(userId)}/result-${crypto.randomUUID()}.${extension}`
+  try {
+    return await storage.put(key, bytes, { contentType })
+  } catch (error) {
+    console.error('[fitroom] generated result storage failed', error)
+    throw new Error('The try-on completed, but its result could not be saved. Check image storage configuration and retry.')
+  }
+}
+
 export const startTryOn = createServerFn({ method: 'POST' })
   .validator((input: unknown) => input as z.infer<typeof generateSchema>)
   .handler(async ({ data }: { data: z.infer<typeof generateSchema> }) => {
@@ -209,15 +255,22 @@ export const startTryOn = createServerFn({ method: 'POST' })
     if (!parsed.success) throw new Error('Add both your photo and a garment photo to generate a try-on.')
     const { selfieUrl, garmentUrl, garmentName, garmentCategory } = parsed.data
 
-    const apiKey = fashnKey()
-    if (!apiKey) {
+    const provider = tryOnProvider()
+    if (!providerReady(provider)) {
       throw new Error(
-        'AI garment fitting is not configured. Set FASHN_API_KEY on the server. FitRoom will not invent a model or return your original selfie as a fake result.',
+        `AI garment fitting is not configured. Set ${provider === 'pixelapi' ? 'PIXELAPI_API_KEY' : 'FASHN_API_KEY'} on the server. FitRoom will not invent a model or return your original selfie as a fake result.`,
       )
     }
 
     const modelImage = await resolveImageDataUri(selfieUrl, 'Your photo')
     const garmentImage = await resolveImageDataUri(garmentUrl, 'The garment photo')
+
+    if (provider === 'pixelapi') {
+      const jobId = await startPixelTryOn(modelImage, garmentImage, pixelCategory(garmentCategory))
+      return { jobId: `${PIXEL_JOB_PREFIX}${jobId}`, garmentName, garmentCategory } as const
+    }
+
+    const apiKey = fashnKey()
 
     const res = await fetch(`${fashnBase()}/run`, {
       method: 'POST',
@@ -262,6 +315,20 @@ export const pollTryOn = createServerFn({ method: 'POST' })
   .handler(async ({ data }: { data: z.infer<typeof pollSchema> }) => {
     const parsed = pollSchema.safeParse(data)
     if (!parsed.success) throw new Error('Missing try-on job.')
+
+    if (parsed.data.jobId.startsWith(PIXEL_JOB_PREFIX)) {
+      const result = await pollPixelTryOn(parsed.data.jobId.slice(PIXEL_JOB_PREFIX.length))
+      if (result.status === 'processing') return { status: 'processing' as const }
+      const stored = await storeResult(result.bytes, result.contentType)
+      return {
+        status: 'completed' as const,
+        imageUrl: stored.url,
+        key: stored.key,
+        note: RESULT_NOTE,
+        mode: 'exact' as const,
+      }
+    }
+
     const apiKey = fashnKey()
     if (!apiKey) throw new Error('AI garment fitting is not configured. Set FASHN_API_KEY on the server.')
 
@@ -325,26 +392,12 @@ export const pollTryOn = createServerFn({ method: 'POST' })
       bytes = await img.arrayBuffer()
     }
 
-    let userId: string | null = null
-    try {
-      userId = (await currentUser())?.id ?? null
-    } catch {
-      userId = null
-    }
-    const extension = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg'
-    const key = `${ownerPrefix(userId)}/result-${crypto.randomUUID()}.${extension}`
-    let stored
-    try {
-      stored = await storage.put(key, bytes, { contentType })
-    } catch (error) {
-      console.error('[fitroom] generated result storage failed', error)
-      throw new Error('The try-on completed, but its result could not be saved. Check image storage configuration and retry.')
-    }
+    const stored = await storeResult(bytes, contentType)
     return {
       status: 'completed' as const,
       imageUrl: stored.url,
       key: stored.key,
-      note: 'AI try-on of your uploaded photo wearing the selected garment.',
+      note: RESULT_NOTE,
       mode: 'exact' as const,
     }
   })

@@ -13,26 +13,26 @@ adapter for Netlify. The Netlify build runs `npm run build:netlify`, publishes
 3. Configure the environment variables listed in `.env.example` in Netlify's
    environment settings. Do not commit `.env` or paste secret values into a
    `PUBLIC_*` or `VITE_*` variable.
-4. Configure a persistent database and object store:
-   - MonstarX deployments can use the MonstarX data and storage endpoints and
-     server-side token supplied by that host.
-   - For a standalone Netlify deployment, provide the existing MonstarX data
-     proxy variables if the database is hosted there, and configure Cloudflare
-     R2 with `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and
-     `R2_BUCKET_NAME`. Add `R2_PUBLIC_BASE_URL` only when the bucket's public
-     objects are intentionally exposed through a public domain.
-   - The Cloudflare D1 binding in `wrangler.jsonc` is for the Cloudflare Worker
-     build; it is not automatically available inside Netlify functions.
-5. Set `BETTER_AUTH_SECRET` to a unique random value and `BETTER_AUTH_URL` to
+4. Configure image storage with **Cloudinary** (takes priority over every other backend):
+   - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` — mark the key and
+     secret as *Contains secret values* in Netlify. Optional `CLOUDINARY_FOLDER` (default `fitroom`).
+   - Assets are uploaded as `type: authenticated`, so they are never publicly reachable on
+     Cloudinary. The browser loads them through `/api/files/<key>`, which checks that the
+     signed-in user owns `users/<id>/…` files before streaming them.
+5. Configure the database. Cloudflare D1 (`wrangler.jsonc`) is not available inside Netlify
+   functions; set `MONSTARX_DATA_URL` and `MONSTARX_DATA_TOKEN`, otherwise sign-in and saved fits fail.
+6. Set `BETTER_AUTH_SECRET` to a unique random value and `BETTER_AUTH_URL` to
    the canonical HTTPS origin of the deployed app.
-6. Set `FASHN_API_KEY` to a server-side FASHN API key. FitRoom submits the
-   uploaded person photo and garment image to FASHN, polls the real prediction,
-   then stores the returned image. Missing credentials and provider failures are
-   shown as errors; the app does not substitute a model photo or synthetic
-   success.
+7. Set `PIXELAPI_API_KEY` (secret) for AI try-on. FitRoom submits the person photo and garment
+   image to PixelAPI's async `/v1/virtual-tryon` endpoint, polls the job from the browser through
+   short server-function calls (safe for Netlify time limits), then stores the result in Cloudinary.
+   Each try-on costs 32 PixelAPI credits; the free trial's 300 credits cover about 9 try-ons.
+   FASHN remains available as a fallback with `TRYON_PROVIDER=fashn` + `FASHN_API_KEY`.
+   Missing credentials and provider failures are shown as errors; the app never substitutes a
+   model photo or synthetic success.
 
 After deployment, verify sign-in, a photo upload, a garment upload, and one real
-try-on using the production site's configured storage and FASHN credentials.
+try-on using the production site's Cloudinary storage and PixelAPI credentials.
 
 ## Cloudflare Workers
 

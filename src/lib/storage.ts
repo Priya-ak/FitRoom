@@ -1,10 +1,13 @@
 // SERVER-ONLY. Object storage for user photos, garment photos, and try-on results.
 // Backends (first match wins):
+//   0. Cloudinary — CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET (private assets)
 //   1. Cloudflare R2 S3 API — R2_ACCOUNT_ID + R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY + R2_BUCKET_NAME
 //   2. Worker R2 binding named FITROOM_BUCKET (optional wrangler binding)
 //   3. MonstarX object storage — MONSTARX_STORAGE_URL + MONSTARX_DATA_TOKEN
 //   4. Local development adapter — in-memory + optional .data/uploads on Node
 // Credentials never leave the server. Browser code only receives URLs.
+
+import { cloudinaryConfig, cloudinaryDelete, cloudinaryGet, cloudinaryKey, cloudinaryList, cloudinaryUpload } from './cloudinary'
 
 export interface StoredFile {
   key: string
@@ -15,7 +18,7 @@ export interface StoredFile {
 
 export type FileBody = ArrayBuffer | ArrayBufferView | Blob | string
 
-export type StorageBackend = 'r2' | 'r2-binding' | 'monstarx' | 'local'
+export type StorageBackend = 'cloudinary' | 'r2' | 'r2-binding' | 'monstarx' | 'local'
 
 type MemoryEntry = { body: Uint8Array; contentType: string }
 
@@ -100,6 +103,7 @@ function diskName(key: string): string {
 }
 
 export function storageBackend(): StorageBackend {
+  if (cloudinaryConfig()) return 'cloudinary'
   if (r2Config()) return 'r2'
   if (process.env.FITROOM_BUCKET || process.env.R2_BINDING) return 'r2-binding'
   if (monstarxEndpoint()) return 'monstarx'
@@ -108,6 +112,7 @@ export function storageBackend(): StorageBackend {
 
 export function storageStatus(): { backend: StorageBackend; ready: boolean; detail: string } {
   const backend = storageBackend()
+  if (backend === 'cloudinary') return { backend, ready: true, detail: 'Cloudinary (private authenticated assets)' }
   if (backend === 'r2') return { backend, ready: true, detail: 'Cloudflare R2 (S3 API)' }
   if (backend === 'r2-binding') return { backend, ready: true, detail: 'Cloudflare R2 Worker binding' }
   if (backend === 'monstarx') return { backend, ready: true, detail: 'MonstarX object storage' }
@@ -115,12 +120,14 @@ export function storageStatus(): { backend: StorageBackend; ready: boolean; deta
     backend: 'local',
     ready: process.env.NODE_ENV !== 'production',
     detail: process.env.NODE_ENV === 'production'
-      ? 'Persistent storage is not configured. Configure Cloudflare R2 or MonstarX storage before accepting uploads.'
+      ? 'Persistent storage is not configured. Set the CLOUDINARY_* variables (or Cloudflare R2 / MonstarX storage) before accepting uploads.'
       : 'Local development storage (in-memory / .data/uploads). Files are not in production object storage.',
   }
 }
 
 function urlFor(key: string): string {
+  // Cloudinary assets are private; always serve them through the access-checked /api/files route.
+  if (cloudinaryConfig()) return appUrlFor(key)
   const r2 = r2Config()
   if (r2?.publicBaseUrl && key.startsWith('public/')) {
     return `${r2.publicBaseUrl.replace(/\/+$/, '')}/${encodeKey(key)}`
@@ -179,6 +186,13 @@ async function getLocal(key: string): Promise<{ body: ReadableStream<Uint8Array>
 export const storage = {
   async put(key: string, body: FileBody, options: { contentType?: string } = {}): Promise<StoredFile> {
     const contentType = options.contentType ?? (body instanceof Blob && body.type ? body.type : 'application/octet-stream')
+    const cld = cloudinaryConfig()
+    if (cld) {
+      const bytes = await toUint8Array(body)
+      const storedKey = cloudinaryKey(key, contentType)
+      const saved = await cloudinaryUpload(cld, storedKey, bytes, contentType)
+      return { key: storedKey, size: saved.size, contentType: saved.contentType, url: appUrlFor(storedKey) }
+    }
     const r2 = r2Config()
     if (r2) {
       const { s3Request, r2PublicUrl } = await import('./s3')
@@ -224,12 +238,14 @@ export const storage = {
     }
 
     if (process.env.NODE_ENV === 'production') {
-      throw new Error('Persistent image storage is not configured. Configure Cloudflare R2 or MonstarX storage.')
+      throw new Error('Persistent image storage is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET.')
     }
     return putLocal(key, body, contentType)
   },
 
   async get(key: string): Promise<{ body: ReadableStream<Uint8Array>; contentType: string; size: number } | null> {
+    const cld = cloudinaryConfig()
+    if (cld) return cloudinaryGet(cld, key)
     const r2 = r2Config()
     if (r2) {
       const { s3Request } = await import('./s3')
@@ -275,6 +291,8 @@ export const storage = {
   },
 
   async delete(key: string): Promise<void> {
+    const cld = cloudinaryConfig()
+    if (cld) return cloudinaryDelete(cld, key)
     const r2 = r2Config()
     if (r2) {
       const { s3Request } = await import('./s3')
@@ -304,6 +322,8 @@ export const storage = {
   },
 
   async list(prefix = ''): Promise<StoredFile[]> {
+    const cld = cloudinaryConfig()
+    if (cld) return (await cloudinaryList(cld, prefix)).map((object) => ({ ...object, url: appUrlFor(object.key) }))
     const mx = monstarxEndpoint()
     if (mx) {
       const response = await fetch(`${mx.base}/list?prefix=${encodeURIComponent(prefix)}&limit=1000`, {
