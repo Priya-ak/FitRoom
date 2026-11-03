@@ -1,9 +1,17 @@
+<<<<<<< HEAD
 import { useEffect, useState } from 'react'
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { Loader2, LogIn, LogOut, MailCheck, UserRound } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { getSessionUser, getSignInOptions } from '@/lib/session'
 import { beginSignIn } from '@/server/auth-flow'
+=======
+import { useState } from 'react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { Loader2, LogIn, LogOut, UserRound } from 'lucide-react'
+import { authClient } from '@/lib/auth-client'
+import { getSessionUser, getSignInOptions } from '@/lib/session'
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
 import { listUserFits } from '@/server/fits'
 
 export const Route = createFileRoute('/account')({
@@ -14,6 +22,7 @@ export const Route = createFileRoute('/account')({
   component: AccountPage,
 })
 
+<<<<<<< HEAD
 type Mode = 'signin' | 'signup' | 'reset'
 type Purpose = 'sign-in' | 'email-verification' | 'forget-password'
 
@@ -34,10 +43,21 @@ function AccountPage() {
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [cooldown, setCooldown] = useState(0)
+=======
+function AccountPage() {
+  const { user: loaderUser, options, remoteFits } = Route.useLoaderData()
+  const session = authClient.useSession()
+  const user = session.data?.user ?? loaderUser
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
+<<<<<<< HEAD
   useEffect(() => {
     if (cooldown <= 0) return
     const timer = setTimeout(() => setCooldown((value) => value - 1), 1000)
@@ -66,6 +86,9 @@ function AccountPage() {
 
   /** Step 1 of every flow: the form is valid -> a code is emailed. */
   async function submitForm(e: React.FormEvent) {
+=======
+  async function submit(e: React.FormEvent) {
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
     e.preventDefault()
     setError('')
     setNotice('')
@@ -74,6 +97,7 @@ function AccountPage() {
       if (mode === 'signup') {
         const result = await authClient.signUp.email({ name: name.trim() || email.split('@')[0] || 'Guest', email, password })
         if (result.error) throw new Error(result.error.message || 'Could not create the account.')
+<<<<<<< HEAD
         goToCode('email-verification')
       } else if (mode === 'signin') {
         const result = await beginSignIn({ data: { email, password } })
@@ -83,6 +107,12 @@ function AccountPage() {
         const result = await authClient.emailOtp.sendVerificationOtp({ email, type: 'forget-password' })
         if (result.error) throw new Error(result.error.message || 'Could not send the code.')
         goToCode('forget-password')
+=======
+        setNotice('Account created. You are signed in.')
+      } else {
+        const result = await authClient.signIn.email({ email, password })
+        if (result.error) throw new Error(result.error.message || 'Could not sign in.')
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -91,6 +121,7 @@ function AccountPage() {
     }
   }
 
+<<<<<<< HEAD
   /** Step 2: the code. */
   async function submitCode(e: React.FormEvent) {
     e.preventDefault()
@@ -155,6 +186,8 @@ function AccountPage() {
     }
   }
 
+=======
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
   async function signOut() {
     setPending(true)
     setError('')
@@ -226,6 +259,7 @@ function AccountPage() {
         </section>
       ) : (
         <section className="mt-8 rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
+<<<<<<< HEAD
           {mode !== 'reset' ? (
             <div className="flex gap-2">
               {(['signin', 'signup'] as const).map((m) => (
@@ -332,6 +366,49 @@ function AccountPage() {
             </form>
           )}
           {options.google && step === 'form' && mode !== 'reset' ? (
+=======
+          <div className="flex gap-2">
+            <button
+              onClick={() => setMode('signin')}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${mode === 'signin' ? 'bg-[#111111] text-white' : 'bg-[#f8f7f4] text-neutral-600'}`}
+            >
+              Sign in
+            </button>
+            <button
+              onClick={() => setMode('signup')}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${mode === 'signup' ? 'bg-[#111111] text-white' : 'bg-[#f8f7f4] text-neutral-600'}`}
+            >
+              Create account
+            </button>
+          </div>
+          <form onSubmit={submit} className="mt-6 space-y-3">
+            {mode === 'signup' ? (
+              <label className="block text-sm font-medium">
+                Name
+                <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-2xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-[#111111]" />
+              </label>
+            ) : null}
+            <label className="block text-sm font-medium">
+              Email
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-2xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-[#111111]" />
+            </label>
+            <label className="block text-sm font-medium">
+              Password (8+ characters)
+              <input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 w-full rounded-2xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-[#111111]" />
+            </label>
+            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            {notice ? <p className="text-sm text-emerald-700">{notice}</p> : null}
+            <button
+              type="submit"
+              disabled={pending}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-[#111111] px-5 py-3 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+            >
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <LogIn className="size-4" />}
+              {mode === 'signup' ? 'Create account' : 'Sign in'}
+            </button>
+          </form>
+          {options.google ? (
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
             <button onClick={google} className="mt-3 w-full rounded-full border border-neutral-300 px-5 py-3 text-sm font-semibold hover:border-neutral-500">
               Continue with Google
             </button>

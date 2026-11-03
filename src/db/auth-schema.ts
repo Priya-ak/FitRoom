@@ -1,5 +1,9 @@
 import { relations, sql } from "drizzle-orm";
+<<<<<<< HEAD
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+=======
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
 
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -92,6 +96,7 @@ export const verification = sqliteTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+<<<<<<< HEAD
 // Rate-limit counters (Better Auth's own limiter and src/lib/throttle.server.ts share this table).
 export const rateLimit = sqliteTable(
   "rate_limit",
@@ -104,6 +109,8 @@ export const rateLimit = sqliteTable(
   (table) => [uniqueIndex("rate_limit_key_idx").on(table.key)],
 );
 
+=======
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),

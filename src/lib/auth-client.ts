@@ -1,16 +1,27 @@
+<<<<<<< HEAD
 import { emailOTPClient } from 'better-auth/client/plugins'
+=======
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
 import { createAuthClient } from 'better-auth/react'
 
 /**
  * Browser client for this app's accounts.
  *   await authClient.signUp.email({ name, email, password })
+<<<<<<< HEAD
  *   await authClient.emailOtp.verifyEmail({ email, otp })       // after sign-up
  *   await authClient.signIn.emailOtp({ email, otp })            // second step of sign-in (see src/server/auth-flow.ts)
+=======
+ *   await authClient.signIn.email({ email, password })
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
  *   await authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' })
  *   await authClient.signOut()
  *   const { data: session } = authClient.useSession()
  */
+<<<<<<< HEAD
 const client = createAuthClient({ plugins: [emailOTPClient()] })
+=======
+const client = createAuthClient()
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
 
 type SocialInput = Parameters<typeof client.signIn.social>[0]
 type SocialResult = Awaited<ReturnType<typeof client.signIn.social>>

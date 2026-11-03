@@ -2,13 +2,21 @@
 // Email + password is enabled; the users can be managed from MonstarX's Backend tab.
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+<<<<<<< HEAD
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { admin, emailOTP, genericOAuth, oauthPopup } from 'better-auth/plugins'
+=======
+import { admin, genericOAuth, oauthPopup } from 'better-auth/plugins'
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
 import { tanstackStartCookies } from 'better-auth/tanstack-start'
 import * as authSchema from '../db/auth-schema'
 import { framedSignIn } from './auth-popup'
 import { getDb } from './db'
+<<<<<<< HEAD
 import { sendEmail, otpEmail, type OtpPurpose } from './email'
+=======
+import { sendEmail } from './email'
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
 
 async function create() {
   const db = await getDb()
@@ -50,8 +58,11 @@ async function create() {
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
+<<<<<<< HEAD
       // An account must prove it owns its email (OTP) before it gets a session.
       requireEmailVerification: true,
+=======
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
       // Password reset works out of the box: the link is emailed through MonstarX's email service.
       sendResetPassword: async ({ user, url }) => {
         try {
@@ -69,6 +80,7 @@ async function create() {
     ...(googleClientId && googleClientSecret ? { socialProviders: { google: { clientId: googleClientId, clientSecret: googleClientSecret, prompt: 'select_account' as const } } } : {}),
     // Someone who signed up with email and later continues with Google (same verified address) stays one user.
     account: { accountLinking: { enabled: true, trustedProviders: ['google'] } },
+<<<<<<< HEAD
     // Verifying the email at sign-up: the code replaces the default link. A user who signs up and enters the code is signed in.
     emailVerification: { autoSignInAfterVerification: true },
     plugins: [
@@ -130,6 +142,13 @@ async function create() {
       ipAddress: { ipAddressHeaders: ['x-nf-client-connection-ip', 'cf-connecting-ip', 'x-forwarded-for'] },
       ...(process.env.MONSTARX_PREVIEW === '1' ? { defaultCookieAttributes: { sameSite: 'none' as const, secure: true, partitioned: true } } : {}),
     },
+=======
+    plugins: [admin(), ...monstarxGoogle, ...popup, tanstackStartCookies()],
+    // A MonstarX preview runs in a frame of the MonstarX workspace, on another site, where browsers drop SameSite=Lax
+    // cookies: sign-in would create a session the app never sees again. Previews use cross-site cookies partitioned to
+    // the workspace; published apps keep Better Auth's first-party defaults.
+    advanced: process.env.MONSTARX_PREVIEW === '1' ? { defaultCookieAttributes: { sameSite: 'none', secure: true, partitioned: true } } : undefined,
+>>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
   })
 }
 
