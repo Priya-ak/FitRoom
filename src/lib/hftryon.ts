@@ -54,7 +54,9 @@ function friendly(detail: string, status?: number): Error {
   if (status === 404 || (status && status >= 500) || text.includes('sleeping') || text.includes('building')) {
     return new Error('The free try-on service is waking up or unavailable. Retry in a minute.')
   }
-  return new Error('The free try-on service could not process these photos. Use a clear, front-facing photo and a well-lit garment image.')
+  return new Error(
+    `The free try-on service could not process these photos${status ? ` (code ${status})` : ''}. Use a clear, front-facing photo and a well-lit garment image.`,
+  )
 }
 
 function dataUriToBlob(dataUri: string): { blob: Blob; extension: string } {
@@ -204,4 +206,29 @@ export async function pollHfTryOn(jobId: string): Promise<HfPollResult> {
     clearTimeout(timer)
     reader?.cancel().catch(() => undefined)
   }
+}
+
+/** Setup check for /api/tryon-health: is the Space reachable, which Gradio version/prefix, is the token accepted. No secrets. */
+export async function hfHealth() {
+  const started = Date.now()
+  const result: Record<string, unknown> = { tokenSet: hfReady(), space: host() }
+  try {
+    const config = await fetch(`${host()}/config`, { headers: headers(), signal: AbortSignal.timeout(10_000) })
+    result.configStatus = config.status
+    if (config.ok) {
+      const json = (await config.json().catch(() => null)) as { version?: string; api_prefix?: string; protocol?: string } | null
+      result.gradioVersion = json?.version
+      result.apiPrefix = json?.api_prefix ?? ''
+      result.protocol = json?.protocol
+    }
+    for (const [flag, prefix] of Object.entries(PREFIXES)) {
+      const info = await fetch(`${host()}${prefix}/info`, { headers: headers(), signal: AbortSignal.timeout(10_000) }).catch(() => null)
+      result[`info_${flag === 'r' ? 'root' : 'gradio_api'}`] = info ? info.status : 'unreachable'
+    }
+    result.note = 'reachable'
+  } catch (error) {
+    result.note = error instanceof Error ? error.name : 'unreachable'
+  }
+  result.ms = Date.now() - started
+  return result
 }
