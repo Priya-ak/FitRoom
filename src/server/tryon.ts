@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { currentUser } from '@/lib/session.server'
 import { keyFromFileUrl, storage, storageStatus } from '@/lib/storage'
+import { hfReady, pollHfTryOn, startHfTryOn } from '@/lib/hftryon'
 import { pixelApiReady, pollPixelTryOn, startPixelTryOn, type PixelCategory } from '@/lib/pixelapi'
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
@@ -21,23 +22,26 @@ function ownerPrefix(userId: string | null): string {
   return userId ? `users/${userId}/tryon` : 'public/tryon'
 }
 
-type TryOnProvider = 'pixelapi' | 'fashn'
+type TryOnProvider = 'pixelapi' | 'huggingface' | 'fashn'
 
 // PixelAPI job ids are prefixed so polling routes to the right provider even if the env changes mid-job.
 const PIXEL_JOB_PREFIX = 'px_'
+const HF_JOB_PREFIX = 'hf_'
 const RESULT_NOTE = 'AI try-on of your uploaded photo wearing the selected garment.'
 
 /** TRYON_PROVIDER picks explicitly; otherwise PixelAPI when its key is set, then FASHN. */
 function tryOnProvider(): TryOnProvider {
   const explicit = (process.env.TRYON_PROVIDER ?? '').trim().toLowerCase()
-  if (explicit === 'pixelapi' || explicit === 'fashn') return explicit
+  if (explicit === 'pixelapi' || explicit === 'fashn' || explicit === 'huggingface') return explicit
   if (pixelApiReady()) return 'pixelapi'
+  if (hfReady()) return 'huggingface'
   if (fashnKey().length > 8) return 'fashn'
   return 'pixelapi'
 }
 
 function providerReady(provider: TryOnProvider): boolean {
-  return provider === 'pixelapi' ? pixelApiReady() : fashnKey().length > 8
+  if (provider === 'pixelapi') return pixelApiReady() || hfReady()
+  return provider === 'huggingface' ? hfReady() : fashnKey().length > 8
 }
 
 export const getRuntimeStatus = createServerFn({ method: 'GET' }).handler(async () => {
@@ -259,16 +263,26 @@ export const startTryOn = createServerFn({ method: 'POST' })
     const provider = tryOnProvider()
     if (!providerReady(provider)) {
       throw new Error(
-        `AI garment fitting is not configured. Set ${provider === 'pixelapi' ? 'PIXELAPI_API_KEY' : 'FASHN_API_KEY'} on the server. FitRoom will not invent a model or return your original selfie as a fake result.`,
+        `AI garment fitting is not configured. Set ${provider === 'pixelapi' ? 'PIXELAPI_API_KEY' : provider === 'huggingface' ? 'HF_TOKEN' : 'FASHN_API_KEY'} on the server. FitRoom will not invent a model or return your original selfie as a fake result.`,
       )
     }
 
     const modelImage = await resolveImageDataUri(selfieUrl, 'Your photo')
     const garmentImage = await resolveImageDataUri(garmentUrl, 'The garment photo')
 
-    if (provider === 'pixelapi') {
-      const jobId = await startPixelTryOn(modelImage, garmentImage, pixelCategory(garmentCategory))
-      return { jobId: `${PIXEL_JOB_PREFIX}${jobId}`, garmentName, garmentCategory } as const
+    if (provider === 'pixelapi' && pixelApiReady()) {
+      try {
+        const jobId = await startPixelTryOn(modelImage, garmentImage, pixelCategory(garmentCategory))
+        return { jobId: `${PIXEL_JOB_PREFIX}${jobId}`, garmentName, garmentCategory } as const
+      } catch (error) {
+        // Out of credits, rate-limited or down: use the free Hugging Face Space when it is configured.
+        if (!hfReady()) throw error
+        console.error('[fitroom] PixelAPI failed, falling back to Hugging Face:', error instanceof Error ? error.message : error)
+      }
+    }
+    if (provider === 'huggingface' || provider === 'pixelapi') {
+      const jobId = await startHfTryOn(modelImage, garmentImage, garmentName)
+      return { jobId: `${HF_JOB_PREFIX}${jobId}`, garmentName, garmentCategory } as const
     }
 
     const apiKey = fashnKey()
@@ -319,6 +333,19 @@ export const pollTryOn = createServerFn({ method: 'POST' })
 
     if (parsed.data.jobId.startsWith(PIXEL_JOB_PREFIX)) {
       const result = await pollPixelTryOn(parsed.data.jobId.slice(PIXEL_JOB_PREFIX.length))
+      if (result.status === 'processing') return { status: 'processing' as const }
+      const stored = await storeResult(result.bytes, result.contentType)
+      return {
+        status: 'completed' as const,
+        imageUrl: stored.url,
+        key: stored.key,
+        note: RESULT_NOTE,
+        mode: 'exact' as const,
+      }
+    }
+
+    if (parsed.data.jobId.startsWith(HF_JOB_PREFIX)) {
+      const result = await pollHfTryOn(parsed.data.jobId.slice(HF_JOB_PREFIX.length))
       if (result.status === 'processing') return { status: 'processing' as const }
       const stored = await storeResult(result.bytes, result.contentType)
       return {

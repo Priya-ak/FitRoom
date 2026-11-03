@@ -201,7 +201,7 @@ function Home() {
         },
       })
       setGenProgress('Fitting the garment onto your photo…')
-      const deadline = Date.now() + 120_000
+      const deadline = Date.now() + 240_000
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 3000))
         const poll = await pollTryOn({ data: { jobId: started.jobId } })
