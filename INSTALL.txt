@@ -1,0 +1,5 @@
+Copy everything in this folder over your FitRoom-upload repo folder (merge, replace when asked), then:
+  npm install
+  (set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN) npm run db:migrate:turso
+  add the 4 env vars in Netlify (see docs/AUTH.md), then
+  git add -A && git commit -m "Email OTP sign-in" && git push
