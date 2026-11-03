@@ -195,8 +195,8 @@ export async function pollHfTryOn(jobId: string): Promise<HfPollResult> {
         return { status: 'completed', ...image }
       }
     }
-    // Stream ended without a result: the job is gone or was already consumed.
-    throw friendly('stream closed without a result')
+    // The stream ended before a result: keep waiting; the browser stops polling after its own time limit.
+    return { status: 'processing' }
   } catch (error) {
     if ((error as { name?: string }).name === 'AbortError') return { status: 'processing' }
     throw error instanceof Error ? error : friendly(String(error))
