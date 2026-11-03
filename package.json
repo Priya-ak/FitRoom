@@ -14,17 +14,11 @@
     "deploy": "npm run build && wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply fitroom-db --local",
     "db:migrate": "wrangler d1 migrations apply fitroom-db --remote",
-<<<<<<< HEAD
     "cf-typegen": "wrangler types",
     "db:migrate:turso": "node scripts/migrate-turso.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.15.0",
-=======
-    "cf-typegen": "wrangler types"
-  },
-  "dependencies": {
->>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-router": "^1.170.36",
     "@tanstack/react-start": "^1.168.54",
