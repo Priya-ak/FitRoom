@@ -1,13 +1,7 @@
-<<<<<<< HEAD
 // SERVER-ONLY. Transactional email. Call sendEmail() inside server function handlers.
 // Provider order: Resend (RESEND_API_KEY, the default on Netlify) -> MonstarX mail (MONSTARX_MAIL_URL) -> dev console log.
 // Resend: set RESEND_FROM to an address on a domain verified in Resend. Without a verified domain, Resend only
 // delivers to the email of the Resend account owner (use onboarding@resend.dev while testing).
-=======
-// SERVER-ONLY. Send email from this app through MonstarX's email service; nothing to configure.
-// Messages go out from this app's own address on MonstarX's mail domain, with a per-app limit,
-// in previews and in published apps alike. Call sendEmail() inside server function handlers.
->>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
 export interface EmailMessage {
   to: string | string[]
   subject: string
@@ -29,7 +23,6 @@ export interface SentEmail {
   skipped?: string[]
 }
 
-<<<<<<< HEAD
 export type OtpPurpose = 'sign-in' | 'email-verification' | 'forget-password'
 
 const OTP_COPY: Record<OtpPurpose, { subject: string; lead: string }> = {
@@ -77,9 +70,6 @@ export async function sendEmail(message: EmailMessage): Promise<SentEmail> {
     console.info('[fitroom] DEV EMAIL (no provider configured)\nto:', message.to, '\n', message.text)
     return { id: 'dev', from: 'dev' }
   }
-=======
-export async function sendEmail(message: EmailMessage): Promise<SentEmail> {
->>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
   const url = process.env.MONSTARX_MAIL_URL
   const token = process.env.MONSTARX_DATA_TOKEN
   if (!url || !token) {

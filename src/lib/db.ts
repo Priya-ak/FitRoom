@@ -1,10 +1,7 @@
 // SERVER-ONLY. The app's database via Drizzle ORM. Call getDb() inside server function handlers.
 // - In MonstarX previews the queries go to MonstarX's data proxy (this project's own database).
 // - On Cloudflare Workers the D1 binding named DB is used directly.
-<<<<<<< HEAD
 // - Anywhere else with TURSO_DATABASE_URL + TURSO_AUTH_TOKEN set (Netlify): Turso, over HTTPS (no native modules).
-=======
->>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core'
 import { drizzle as drizzleProxy } from 'drizzle-orm/sqlite-proxy'
 import * as schema from '../db/schema'
@@ -29,15 +26,12 @@ async function create(): Promise<AppDb> {
     const { drizzle } = await import('drizzle-orm/d1')
     return drizzle(binding as never, { schema }) as unknown as AppDb
   }
-<<<<<<< HEAD
   const tursoUrl = process.env.TURSO_DATABASE_URL
   if (tursoUrl) {
     const [{ createClient }, { drizzle }] = await Promise.all([import('@libsql/client/web'), import('drizzle-orm/libsql/web')])
     const client = createClient({ url: tursoUrl, authToken: process.env.TURSO_AUTH_TOKEN })
     return drizzle(client, { schema }) as unknown as AppDb
   }
-=======
->>>>>>> 14ed2d993790337fa7abbca73a7f2755b6b8af56
   const url = process.env.MONSTARX_DATA_URL
   const token = process.env.MONSTARX_DATA_TOKEN
   if (!url || !token) {
