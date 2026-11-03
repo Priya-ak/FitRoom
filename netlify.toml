@@ -4,3 +4,5 @@
 
 [build.environment]
   NODE_VERSION = "22.13.0"
+  # The site URL is public (it is written in the README); it is not a secret, so the scanner must not fail the build on it.
+  SECRETS_SCAN_OMIT_KEYS = "BETTER_AUTH_URL"
