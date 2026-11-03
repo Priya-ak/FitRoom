@@ -11,9 +11,9 @@ export const Route = createFileRoute('/')({
 
 const FITS_KEY = 'fitroom-fits-v1'
 const MAX_MB = 15
-// Photos are shrunk in the browser first: the try-on model works best around 1024px and
+// Photos are shrunk in the browser first: the try-on model works best at 1024px or less and
 // Netlify rejects request bodies over ~6 MB.
-const MAX_SIDE = 1280
+const MAX_SIDE = 1024
 
 type GarmentKind = 'top' | 'bottom' | 'dress'
 const GARMENT_KINDS: { value: GarmentKind; label: string }[] = [

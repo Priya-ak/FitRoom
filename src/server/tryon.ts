@@ -207,7 +207,8 @@ async function resolveImageDataUri(url: string, label: string): Promise<string> 
   }
 
   if (/^https?:\/\//i.test(url)) {
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(15_000) }).catch(() => null)
+    if (!response) throw new Error(`Could not load the ${label.toLowerCase()} in time. Please retry.`)
     if (!response.ok) throw new Error(`Could not load the ${label.toLowerCase()} (${response.status}).`)
     const type = (response.headers.get('content-type') || 'image/jpeg').split(';')[0]!.trim()
     if (type.includes('svg')) {

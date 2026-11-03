@@ -12,7 +12,9 @@ export type PixelPollResult =
   | { status: 'processing' }
   | { status: 'completed'; bytes: Uint8Array; contentType: string }
 
-const REQUEST_TIMEOUT_MS = 25_000
+// Per-request limits. Override with PIXELAPI_TIMEOUT_MS (applies to submit; polls use a shorter cap).
+const SUBMIT_TIMEOUT_MS = Math.min(Math.max(Number(process.env.PIXELAPI_TIMEOUT_MS) || 25_000, 5_000), 55_000)
+const POLL_TIMEOUT_MS = 15_000
 // PixelAPI's CDN may block requests without a descriptive User-Agent.
 const USER_AGENT = 'FitRoom/0.1 (server; virtual try-on)'
 
@@ -64,11 +66,13 @@ function providerDetail(json: unknown): { code: string | null; message: string |
   return { code: null, message: null }
 }
 
-async function call(path: string, init: RequestInit): Promise<{ response: Response; json: unknown }> {
+async function call(stage: 'submit' | 'status', path: string, init: RequestInit): Promise<{ response: Response; json: unknown }> {
   const key = pixelApiKey()
   if (!key) throw new Error('AI garment fitting is not configured. Set PIXELAPI_API_KEY on the server.')
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const limit = stage === 'submit' ? SUBMIT_TIMEOUT_MS : POLL_TIMEOUT_MS
+  const started = Date.now()
+  const timer = setTimeout(() => controller.abort(), limit)
   try {
     const response = await fetch(`${baseUrl()}${path}`, {
       ...init,
@@ -84,7 +88,12 @@ async function call(path: string, init: RequestInit): Promise<{ response: Respon
     return { response, json }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('The try-on service did not respond in time. Please retry.')
+      console.error(`[fitroom] PixelAPI ${stage} timed out after ${Date.now() - started}ms`)
+      throw new Error(
+        stage === 'submit'
+          ? 'The try-on service did not accept the photos in time. Wait a minute and retry.'
+          : 'The try-on service is slow to report progress. Wait a moment and generate again.',
+      )
     }
     console.error('[fitroom] PixelAPI network error', error)
     throw new Error('The try-on service could not be reached. Please retry.')
@@ -120,7 +129,7 @@ function failure(stage: string, response: Response, json: unknown): Error {
 }
 
 export async function startPixelTryOn(personDataUri: string, garmentDataUri: string, category: PixelCategory): Promise<string> {
-  const { response, json } = await call('/v1/virtual-tryon', {
+  const { response, json } = await call('submit', '/v1/virtual-tryon', {
     method: 'POST',
     body: JSON.stringify({
       person_image: rawBase64(personDataUri),
@@ -138,7 +147,7 @@ export async function startPixelTryOn(personDataUri: string, garmentDataUri: str
 }
 
 export async function pollPixelTryOn(jobId: string): Promise<PixelPollResult> {
-  const { response, json } = await call(`/v1/virtual-tryon/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' })
+  const { response, json } = await call('status', `/v1/virtual-tryon/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' })
   if (response.status === 404) throw new Error('The try-on job was not found. Please generate again.')
   if (!response.ok) throw failure('status', response, json)
 
@@ -180,4 +189,25 @@ export async function pollPixelTryOn(jobId: string): Promise<PixelPollResult> {
   const contentType = sniffImageType(bytes)
   if (!contentType) throw new Error('The try-on service returned an unsupported image format.')
   return { status: 'completed', bytes, contentType }
+}
+
+/**
+ * Cheap reachability probe used by /api/tryon-health. Polls a job id that cannot exist, so it never
+ * starts work or spends credits: 404/422 means "reachable and key accepted", 401 means a bad key.
+ */
+export async function pixelApiHealth(): Promise<{ keySet: boolean; reachable: boolean; httpStatus: number | null; ms: number; note: string }> {
+  const started = Date.now()
+  if (!pixelApiKey()) return { keySet: false, reachable: false, httpStatus: null, ms: 0, note: 'PIXELAPI_API_KEY is not set on the server.' }
+  try {
+    const { response } = await call('status', '/v1/virtual-tryon/jobs/healthcheck-000000', { method: 'GET' })
+    const ms = Date.now() - started
+    const note =
+      response.status === 401 ? 'The API key was refused.'
+        : response.status === 403 ? 'Blocked by PixelAPI CDN.'
+          : response.status === 402 ? 'Out of credits.'
+            : 'PixelAPI answered.'
+    return { keySet: true, reachable: true, httpStatus: response.status, ms, note }
+  } catch (error) {
+    return { keySet: true, reachable: false, httpStatus: null, ms: Date.now() - started, note: error instanceof Error ? error.message : 'Request failed.' }
+  }
 }

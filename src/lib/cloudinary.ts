@@ -151,7 +151,7 @@ export async function cloudinaryGet(
   const signature = await signCloudinaryParams(params, cfg.apiSecret)
   const query = new URLSearchParams({ ...params, api_key: cfg.apiKey, signature })
 
-  const response = await fetch(`${endpoint(cfg, 'image/download')}?${query.toString()}`)
+  const response = await fetch(`${endpoint(cfg, 'image/download')}?${query.toString()}`, { signal: AbortSignal.timeout(20_000) })
   if (response.status === 404) return null
   if (!response.ok || !response.body) {
     console.error('[fitroom] Cloudinary read failed', response.status)
