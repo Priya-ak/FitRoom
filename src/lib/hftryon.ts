@@ -55,7 +55,7 @@ function friendly(detail: string, status?: number): Error {
   if (status === 404 || (status && status >= 500) || text.includes('sleeping') || text.includes('building')) {
     return new Error('The free try-on service is waking up or unavailable. Retry in a minute.')
   }
-  const detailText = detail.replace(/hf_[A-Za-z0-9]+/g, '[token]').replace(/\s+/g, ' ').trim().slice(0, 140)
+  const detailText = detail.replace(/hf_[A-Za-z0-9]+/g, '[token]').replace(/\s+/g, ' ').trim().slice(0, 240)
   return new Error(
     `The free try-on service could not process these photos${status ? ` (code ${status})` : ''}${detailText ? ` [${detailText}]` : ''}. Use a clear, front-facing photo of a person and a top, shirt or jacket.`,
   )
@@ -103,11 +103,22 @@ async function tryonFnIndex(prefix: string): Promise<number> {
   if (cachedFnIndex !== null) return cachedFnIndex
   const response = await fetch(`${host()}${prefix}/config`, { headers: headers(), signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS) })
   if (!response.ok) throw Object.assign(friendly(await response.text().catch(() => ''), response.status), { status: response.status })
-  const config = (await response.json().catch(() => null)) as { dependencies?: Array<{ id?: number; api_name?: string }> } | null
-  const dependency = config?.dependencies?.find((item) => item.api_name === API_NAME)
-  if (typeof dependency?.id !== 'number') throw friendly(`no "${API_NAME}" function in the Space config`)
-  cachedFnIndex = dependency.id
-  return cachedFnIndex
+  const config = (await response.json().catch(() => null)) as {
+    dependencies?: Array<{ id?: number; api_name?: string | null; inputs?: unknown[]; outputs?: unknown[] }>
+  } | null
+  const dependencies = config?.dependencies ?? []
+  const clean = (name?: string | null) => (name ?? '').replace(/^\//, '')
+  // Prefer the named endpoint; otherwise the function shaped like the try-on (7 inputs, 2 outputs).
+  let position = dependencies.findIndex((item) => clean(item.api_name) === API_NAME)
+  if (position < 0) position = dependencies.findIndex((item) => item.inputs?.length === 7 && item.outputs?.length === 2)
+  const dependency = dependencies[position]
+  if (!dependency) {
+    const names = dependencies.map((item) => clean(item.api_name) || '-').slice(0, 12).join(',')
+    throw friendly(`no "${API_NAME}" function in the Space config (${dependencies.length} functions: ${names}; keys: ${Object.keys(config ?? {}).slice(0, 8).join(',')})`)
+  }
+  const index = typeof dependency.id === 'number' ? dependency.id : position
+  cachedFnIndex = index
+  return index
 }
 
 function sessionHash(): string {
