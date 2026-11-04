@@ -96,6 +96,23 @@ async function upload(prefix: string, dataUri: string, name: string): Promise<Fi
   return { path, orig_name: filename, meta: { _type: 'gradio.FileData' } }
 }
 
+/** Dropped connections ("terminated", "fetch failed", resets) are normal with a shared Space behind several proxies. */
+function isTransient(error: unknown): boolean {
+  const name = (error as { name?: string } | null)?.name ?? ''
+  const message = (error as { message?: string } | null)?.message ?? ''
+  return name === 'AbortError' || name === 'TimeoutError' || /terminated|aborted|fetch failed|ECONNRESET|socket|other side closed/i.test(message)
+}
+
+async function withRetry<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    if (!isTransient(error)) throw error
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    return run()
+  }
+}
+
 let cachedFnIndex: number | null = null
 
 /** The index of the "tryon" function in the Space's config (Gradio's queue API addresses functions by index). */
@@ -132,6 +149,7 @@ export async function startHfTryOn(personDataUri: string, garmentDataUri: string
   for (const flag of ['r', 'g'] as PrefixFlag[]) {
     const prefix = PREFIXES[flag]
     try {
+      return await withRetry(async () => {
       const fnIndex = await tryonFnIndex(prefix)
       const [person, garment] = await Promise.all([upload(prefix, personDataUri, 'person'), upload(prefix, garmentDataUri, 'garment')])
       const hash = sessionHash()
@@ -158,14 +176,15 @@ export async function startHfTryOn(personDataUri: string, garmentDataUri: string
       })
       if (!response.ok) throw Object.assign(friendly(await response.text().catch(() => ''), response.status), { status: response.status })
       return `${flag}${hash}`
+      })
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('The free try-on service did not respond. Please retry.')
       // Only a missing endpoint means "wrong API prefix, try the other one"; anything else is final.
       if ((error as { status?: number }).status !== 404) break
     }
   }
-  if (lastError?.name === 'TimeoutError' || lastError?.name === 'AbortError') {
-    throw new Error('The free try-on service did not respond in time. Please retry.')
+  if (isTransient(lastError)) {
+    throw new Error('The free try-on service dropped the connection (it is shared and often busy). Please retry in a moment.')
   }
   throw lastError ?? new Error('The free try-on service did not respond. Please retry.')
 }
@@ -248,7 +267,8 @@ export async function pollHfTryOn(jobId: string): Promise<HfPollResult> {
     // The stream ended before a result: keep waiting; the browser stops polling after its own time limit.
     return { status: 'processing' }
   } catch (error) {
-    if ((error as { name?: string }).name === 'AbortError') return { status: 'processing' }
+    // A dropped or timed-out stream just means "not finished yet": the browser polls again.
+    if (isTransient(error)) return { status: 'processing' }
     throw error instanceof Error ? error : friendly(String(error))
   } finally {
     clearTimeout(timer)
